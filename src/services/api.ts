@@ -64,8 +64,7 @@ api.interceptors.response.use(
     if (
       body &&
       typeof body === "object" &&
-      "success" in body &&
-      "data" in body
+      "success" in body
     ) {
       if (body.success === false) {
         throw new AxiosError(
@@ -77,10 +76,23 @@ api.interceptors.response.use(
         );
       }
 
-      return {
-        ...response,
-        data: body.data,
-      };
+      // Extract data from response, checking for data, image, or images keys
+      if ("data" in body) {
+        return {
+          ...response,
+          data: body.data,
+        };
+      } else if ("image" in body) {
+        return {
+          ...response,
+          data: body.image,
+        };
+      } else if ("images" in body) {
+        return {
+          ...response,
+          data: body.images,
+        };
+      }
     }
 
     return response;

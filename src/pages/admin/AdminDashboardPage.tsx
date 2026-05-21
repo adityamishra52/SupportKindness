@@ -250,25 +250,59 @@ function GalleryAdmin({
         formData.append("category", "general");
 
         const response = await api.post<GalleryItem>("/gallery", formData);
-        console.debug("[GalleryAdmin] uploaded image response", response.data);
+        console.debug("[GalleryAdmin] uploaded image response", {
+          responseData: response.data,
+          responseStatus: response.status,
+          hasId: response.data?._id ? "yes" : "no",
+          hasImageUrl: response.data?.imageUrl ? "yes" : "no",
+        });
+
+        if (!response.data || typeof response.data !== "object") {
+          console.error("[GalleryAdmin] response is not an object", response.data);
+          throw new Error("Invalid upload response: response data is not an object");
+        }
 
         if (!isGalleryItem(response.data)) {
-          throw new Error("Upload did not return a saved gallery image.");
+          console.error("[GalleryAdmin] isGalleryItem validation failed", {
+            id: (response.data as any)?._id,
+            imageUrl: (response.data as any)?.imageUrl,
+          });
+          throw new Error("Upload did not return a saved gallery image. Missing _id or imageUrl.");
         }
 
         uploadedImages.push(response.data);
+        console.debug("[GalleryAdmin] image uploaded", {
+          id: response.data._id,
+          title: response.data.title,
+        });
       }
+
+      console.debug("[GalleryAdmin] fetching fresh gallery list", {
+        uploadedCount: uploadedImages.length,
+      });
 
       const listResponse = await api.get<GalleryItem[]>("/gallery");
       const freshItems = Array.isArray(listResponse.data)
         ? listResponse.data.filter(isGalleryItem)
         : [];
-      const missingSavedImage = uploadedImages.some(
+
+      console.debug("[GalleryAdmin] fresh gallery list", {
+        totalCount: freshItems.length,
+        uploadedIds: uploadedImages.map((img) => img._id),
+        freshIds: freshItems.map((img) => img._id),
+      });
+
+      const missingSavedImages = uploadedImages.filter(
         (image) => !freshItems.some((item) => item._id === image._id)
       );
 
-      if (missingSavedImage) {
-        throw new Error("Upload reached the server, but the image was not found in the saved gallery list.");
+      if (missingSavedImages.length > 0) {
+        console.error("[GalleryAdmin] missing images after upload", {
+          missing: missingSavedImages.map((img) => img._id),
+        });
+        throw new Error(
+          `Upload reached the server, but ${missingSavedImages.length} image(s) were not found in the saved gallery list.`
+        );
       }
 
       gallery.setData(freshItems);
@@ -282,6 +316,7 @@ function GalleryAdmin({
           : "Images uploaded successfully."
       );
     } catch (error: any) {
+      console.error("[GalleryAdmin] upload error", error);
       showToast(getRequestMessage(error, "Upload failed. Please check backend upload settings."));
     } finally {
       setUploading(false);
