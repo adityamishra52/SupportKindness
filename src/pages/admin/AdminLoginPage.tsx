@@ -4,6 +4,7 @@ import { FiArrowLeft, FiLock } from "react-icons/fi";
 import { PageMeta } from "@/components/ui/PageMeta";
 import { siteConfig } from "@/config/siteConfig";
 import { useToast } from "@/context/ToastContext";
+import { api } from "@/services/api";
 
 const ADMIN_AUTH_KEY = "cc-admin-auth";
 const ADMIN_TOKEN_KEY = "cc-admin-auth-token";
@@ -12,32 +13,47 @@ const ADMIN_PASSWORD_KEY = "cc-admin-password";
 export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [verifying, setVerifying] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "";
   const adminToken = import.meta.env.VITE_ADMIN_TOKEN || "";
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const enteredPassword = password.trim();
 
     setError("");
 
-    if (!adminPassword) {
-      setError("Admin password is not configured.");
-      return;
-    }
-
     if (!enteredPassword) {
       setError("Please enter admin password.");
       return;
     }
 
-    if (enteredPassword !== adminPassword) {
-      setError("Invalid password. Please try again.");
+    try {
+      setVerifying(true);
+
+      localStorage.removeItem(ADMIN_AUTH_KEY);
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+      localStorage.removeItem(ADMIN_PASSWORD_KEY);
+
+      await api.get("/contact", {
+        headers: {
+          "X-Admin-Password": enteredPassword,
+          ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
+        },
+      });
+    } catch (error: any) {
+      const status = error?.response?.status;
+      setError(
+        status === 401
+          ? "Backend rejected this admin password. Set Render ADMIN_PASSWORD and Vercel VITE_ADMIN_PASSWORD to the same value, then log in again."
+          : error?.message || "Unable to verify admin access with the backend."
+      );
       return;
+    } finally {
+      setVerifying(false);
     }
 
     localStorage.setItem(ADMIN_AUTH_KEY, "true");
@@ -101,9 +117,10 @@ export default function AdminLoginPage() {
 
           <button
             type="submit"
+            disabled={verifying}
             className="w-full rounded-3xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
           >
-            Continue to dashboard
+            {verifying ? "Verifying..." : "Continue to dashboard"}
           </button>
         </form>
 

@@ -87,16 +87,11 @@ api.interceptors.response.use(
   },
   (error: AxiosError<any>) => {
     const status = error.response?.status;
-    const requestUrl = error.config?.url || "";
 
     const isAdminPage = window.location.pathname.startsWith("/admin");
     const isLoginPage = window.location.pathname === "/admin/login";
 
-    const isAuthRoute =
-      requestUrl.includes("/admin/login") ||
-      requestUrl.includes("/auth/login");
-
-    if (status === 401 && isAdminPage && isAuthRoute && !isLoginPage) {
+    if (status === 401 && isAdminPage && !isLoginPage) {
       localStorage.removeItem("cc-admin-auth");
       localStorage.removeItem("cc-admin-auth-token");
       localStorage.removeItem("cc-admin-password");
