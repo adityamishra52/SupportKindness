@@ -5,10 +5,7 @@ import { PageMeta } from "@/components/ui/PageMeta";
 import { siteConfig } from "@/config/siteConfig";
 import { useToast } from "@/context/ToastContext";
 import { api } from "@/services/api";
-
-const ADMIN_AUTH_KEY = "cc-admin-auth";
-const ADMIN_TOKEN_KEY = "cc-admin-auth-token";
-const ADMIN_PASSWORD_KEY = "cc-admin-password";
+import { clearAdminSession, saveAdminSession } from "@/utils/adminAuth";
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
@@ -34,9 +31,7 @@ export default function AdminLoginPage() {
     try {
       setVerifying(true);
 
-      localStorage.removeItem(ADMIN_AUTH_KEY);
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-      localStorage.removeItem(ADMIN_PASSWORD_KEY);
+      clearAdminSession();
 
       await api.get("/contact", {
         headers: {
@@ -56,14 +51,7 @@ export default function AdminLoginPage() {
       setVerifying(false);
     }
 
-    localStorage.setItem(ADMIN_AUTH_KEY, "true");
-    localStorage.setItem(ADMIN_PASSWORD_KEY, enteredPassword);
-
-    if (adminToken) {
-      localStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
-    } else {
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-    }
+    saveAdminSession(enteredPassword, adminToken);
 
     showToast("Admin access granted");
     navigate("/admin", { replace: true });

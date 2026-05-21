@@ -4,6 +4,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios";
 import { API_BASE_URL } from "@/constants/env";
+import { clearAdminSession } from "@/utils/adminAuth";
 
 function isFrontendHtmlResponse(body: unknown) {
   if (typeof body !== "string") return false;
@@ -109,9 +110,7 @@ api.interceptors.response.use(
     const isLoginPage = window.location.pathname === "/admin/login";
 
     if (status === 401 && isAdminPage && !isLoginPage) {
-      localStorage.removeItem("cc-admin-auth");
-      localStorage.removeItem("cc-admin-auth-token");
-      localStorage.removeItem("cc-admin-password");
+      clearAdminSession();
       window.location.href = "/admin/login";
     }
 

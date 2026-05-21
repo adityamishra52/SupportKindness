@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FiBarChart2, FiExternalLink, FiGrid, FiLogOut, FiMenu, FiShield, FiX } from "react-icons/fi";
 import { siteConfig } from "@/config/siteConfig";
+import { clearAdminSession, isAdminSessionValid } from "@/utils/adminAuth";
 
 const navItems = [
   { label: "Overview", to: "/admin", icon: FiGrid, end: true },
@@ -19,6 +20,13 @@ export function AdminLayout() {
   }, []);
 
   useEffect(() => {
+    if (!isAdminSessionValid()) {
+      clearAdminSession();
+      navigate("/admin/login", { replace: true });
+    }
+  }, [navigate, location.pathname]);
+
+  useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     setMenuOpen(false);
   }, [location.pathname]);
@@ -29,9 +37,7 @@ export function AdminLayout() {
   );
 
   const handleLogout = () => {
-    localStorage.removeItem("cc-admin-auth");
-    localStorage.removeItem("cc-admin-auth-token");
-    localStorage.removeItem("cc-admin-password");
+    clearAdminSession();
     navigate("/admin/login", { replace: true });
   };
 

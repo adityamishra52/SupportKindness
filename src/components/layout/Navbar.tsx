@@ -64,7 +64,7 @@ export function Navbar() {
             : "border-transparent bg-[#081120]/45 backdrop-blur-xl"
           : scrolled
           ? "border-slate-200/60 bg-white/80 shadow-2xl shadow-slate-200/40 backdrop-blur-2xl"
-          : "border-transparent bg-white/10 backdrop-blur-xl"
+          : "border-slate-200/50 bg-white/78 shadow-lg shadow-cyan-950/5 backdrop-blur-xl"
       )}
     >
       <nav className="mx-auto flex h-[80px] w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-10">
@@ -119,9 +119,7 @@ export function Navbar() {
                       : "text-cyan-600"
                     : theme === "dark"
                     ? "text-slate-200 hover:text-cyan-300"
-                    : scrolled
-                    ? "text-slate-700 hover:text-cyan-600"
-                    : "text-white hover:text-cyan-200"
+                    : "text-slate-700 hover:text-cyan-600"
                 )
               }
             >

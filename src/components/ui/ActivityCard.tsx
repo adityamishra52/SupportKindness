@@ -6,9 +6,9 @@ import { asset } from "@/utils/asset";
 
 export function ActivityCard({ item }: { item: Activity }) {
   const [open, setOpen] = useState(false);
-  const imageSrc =
-    asset(item.images?.[0]) ||
+  const fallbackImage =
     "https://images.unsplash.com/photo-1529390079861-591de354faf5?w=900&auto=format&fit=crop";
+  const imageSrc = asset(item.images?.[0]) || fallbackImage;
   const shortDescription =
     item.description.length > 110
       ? `${item.description.slice(0, 110).trim()}...`
@@ -17,10 +17,10 @@ export function ActivityCard({ item }: { item: Activity }) {
   const formattedDate =
     campaignDate && !Number.isNaN(campaignDate.getTime())
       ? new Intl.DateTimeFormat("en", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }).format(campaignDate)
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }).format(campaignDate)
       : null;
 
   return (
@@ -40,6 +40,10 @@ export function ActivityCard({ item }: { item: Activity }) {
             alt={item.title}
             className="h-full w-full rounded-[1.25rem] object-contain transition duration-500 group-hover:scale-[1.03]"
             loading="lazy"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = fallbackImage;
+            }}
           />
           <span className="absolute right-5 top-5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-slate-900 shadow-lg shadow-slate-900/10 opacity-0 transition group-hover:opacity-100 dark:bg-slate-950/85 dark:text-white">
             <FiArrowUpRight className="h-5 w-5" />
@@ -110,6 +114,10 @@ export function ActivityCard({ item }: { item: Activity }) {
                   alt={item.title}
                   className="max-h-[64vh] w-full rounded-[1.5rem] object-contain shadow-2xl shadow-slate-950/15"
                   loading="lazy"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = fallbackImage;
+                  }}
                 />
               </div>
 

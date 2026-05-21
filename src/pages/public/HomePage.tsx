@@ -146,22 +146,22 @@ export default function HomePage() {
         keywords={`${siteConfig.appName}, community support, charity, NGO, donations, animal welfare, transparency`}
       />
 
-      <section className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(120deg,#07111f,#0b2f3c,#0b1220)] text-white">
+      <section className="relative overflow-hidden border-b border-cyan-100/80 bg-[radial-gradient(circle_at_top_left,rgba(207,250,254,0.9),transparent_34%),linear-gradient(135deg,#ffffff,#effbff_52%,#ecfdf5)] text-slate-950 dark:border-white/10 dark:bg-[linear-gradient(120deg,#07111f,#0b2f3c,#0b1220)] dark:text-white">
         <motion.div
           animate={{ x: [0, 40, 0], y: [0, -18, 0] }}
           transition={{ duration: 12, repeat: Infinity }}
-          className="absolute -left-20 top-16 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl"
+          className="absolute -left-20 top-16 h-72 w-72 rounded-full bg-cyan-300/25 blur-3xl dark:bg-cyan-400/20"
         />
 
         <motion.div
           animate={{ x: [0, -24, 0], y: [0, 20, 0] }}
           transition={{ duration: 11, repeat: Infinity }}
-          className="absolute right-10 top-12 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl"
+          className="absolute right-10 top-12 h-80 w-80 rounded-full bg-emerald-300/25 blur-3xl dark:bg-emerald-400/20"
         />
 
         <div className="relative z-10 mx-auto grid min-h-[88vh] w-full max-w-7xl items-center gap-12 px-6 py-24 lg:grid-cols-[1.05fr_0.95fr] lg:px-10">
           <div className="space-y-7">
-            <span className="inline-flex rounded-full border border-cyan-300/35 bg-cyan-400/10 px-4 py-1.5 text-xs font-semibold tracking-wide text-cyan-200">
+            <span className="inline-flex rounded-full border border-cyan-200 bg-white/80 px-4 py-1.5 text-xs font-semibold tracking-wide text-cyan-700 shadow-sm shadow-cyan-900/5 dark:border-cyan-300/35 dark:bg-cyan-400/10 dark:text-cyan-200">
               Community-Driven Support Initiative
             </span>
 
@@ -169,7 +169,7 @@ export default function HomePage() {
               Community Support, Transparently Delivered.
             </h1>
 
-            <p className="max-w-2xl text-slate-200">
+            <p className="max-w-2xl text-slate-600 dark:text-slate-200">
               A personal initiative focused on animal feeding, food support,
               tree plantation, and rapid local community help.
             </p>
@@ -184,7 +184,7 @@ export default function HomePage() {
 
               <Link
                 to="/our-work"
-                className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-6 py-3 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/20"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-6 py-3 font-semibold text-slate-800 shadow-lg shadow-slate-200/60 transition hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-white dark:border-white/30 dark:bg-white/10 dark:text-white dark:shadow-none dark:hover:bg-white/20"
               >
                 Explore Activities
               </Link>
@@ -199,7 +199,7 @@ export default function HomePage() {
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.08 }}
-                  className="glass-surface overflow-hidden rounded-3xl border border-white/15 p-2"
+                  className="overflow-hidden rounded-3xl border border-cyan-100 bg-white/85 p-2 shadow-2xl shadow-cyan-950/10 backdrop-blur-xl dark:border-white/15 dark:bg-white/10"
                 >
                   <img
                     src={

@@ -26,17 +26,11 @@ import TestimonialsPage from "@/pages/public/TestimonialsPage";
 import TransparencyPage from "@/pages/public/TransparencyPage";
 import TreePlantationPage from "@/pages/public/TreePlantationPage";
 import VolunteerPage from "@/pages/public/VolunteerPage";
+import { clearAdminSession, isAdminSessionValid } from "@/utils/adminAuth";
 
 function RequireAdmin({ children }: { children: ReactElement }) {
-  const auth = localStorage.getItem("cc-admin-auth") === "true";
-  const hasBackendCredential =
-    Boolean(localStorage.getItem("cc-admin-password")) ||
-    Boolean(localStorage.getItem("cc-admin-auth-token"));
-
-  if (!auth || !hasBackendCredential) {
-    localStorage.removeItem("cc-admin-auth");
-    localStorage.removeItem("cc-admin-auth-token");
-    localStorage.removeItem("cc-admin-password");
+  if (!isAdminSessionValid()) {
+    clearAdminSession();
     return <Navigate to="/admin/login" replace />;
   }
 
