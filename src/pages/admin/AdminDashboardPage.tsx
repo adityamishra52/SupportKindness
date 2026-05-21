@@ -324,7 +324,7 @@ function GalleryAdmin({
   };
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+    <div className="grid gap-6 2xl:grid-cols-[0.72fr_1.28fr]">
       <form onSubmit={uploadImages} className="space-y-4">
         <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-400 hover:bg-slate-100 dark:border-white/15 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
           <FiUploadCloud className="h-9 w-9 text-slate-500 dark:text-slate-400" />
@@ -363,14 +363,26 @@ function GalleryAdmin({
         </button>
       </form>
 
-      <div className="grid max-h-[34rem] gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
+      <div className="min-w-0">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-slate-950 dark:text-white">
+              Saved gallery images
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {items.length} image{items.length === 1 ? "" : "s"} in the public gallery
+            </p>
+          </div>
+        </div>
+
+        <div className="grid max-h-[46rem] content-start items-start gap-4 overflow-y-auto pr-2 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
         {gallery.loading &&
           items.length === 0 &&
           Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="h-56 animate-pulse rounded-3xl bg-slate-100 dark:bg-white/[0.06]"
-            />
+            className="h-72 animate-pulse rounded-2xl bg-slate-100 dark:bg-white/[0.06]"
+          />
           ))}
 
         {!gallery.loading && items.length === 0 && (
@@ -379,61 +391,79 @@ function GalleryAdmin({
           </div>
         )}
 
-        {items.map((item) => (
-          <article
-            key={item._id}
-            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0d1117]"
-          >
-            <img
-              src={asset(item.imageUrl) || GALLERY_IMAGE_FALLBACK}
-              alt={item.title || "Gallery image"}
-              className="h-40 w-full object-cover"
-              loading="lazy"
-              onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = GALLERY_IMAGE_FALLBACK;
-              }}
-            />
+          {items.map((item) => {
+            const deleteImage = async () => {
+              try {
+                await api.delete(`/gallery/${item._id}`);
+                const listResponse = await api.get<GalleryItem[]>("/gallery");
+                const freshItems = Array.isArray(listResponse.data)
+                  ? listResponse.data.filter(isGalleryItem)
+                  : [];
 
-            <div className="p-4">
-              <p className="truncate font-semibold text-slate-950 dark:text-white">
-                {item.title || "Untitled image"}
-              </p>
+                if (freshItems.some((image) => image._id === item._id)) {
+                  throw new Error("Delete reached the server, but the image still exists in the gallery list.");
+                }
 
-              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                {item.category || "general"}
-              </p>
+                gallery.setData(freshItems);
+                writeLocal(STORE_KEYS.gallery, freshItems);
+                setItems(freshItems);
+                showToast("Image deleted.");
+              } catch (error: any) {
+                showToast(getRequestMessage(error, "Delete failed. Please check admin credentials."));
+              }
+            };
 
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await api.delete(`/gallery/${item._id}`);
-                    const listResponse = await api.get<GalleryItem[]>("/gallery");
-                    const freshItems = Array.isArray(listResponse.data)
-                      ? listResponse.data.filter(isGalleryItem)
-                      : [];
-
-                    if (freshItems.some((image) => image._id === item._id)) {
-                      throw new Error("Delete reached the server, but the image still exists in the gallery list.");
-                    }
-
-                    gallery.setData(freshItems);
-                    writeLocal(STORE_KEYS.gallery, freshItems);
-                    setItems(freshItems);
-                    showToast("Image deleted.");
-                  } catch (error: any) {
-                    showToast(getRequestMessage(error, "Delete failed. Please check admin credentials."));
-                  }
-                }}
-                className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-400/10 dark:text-rose-300"
+            return (
+              <article
+                key={item._id}
+                className="flex min-h-[19rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0d1117]"
               >
-                <FiTrash2 className="h-4 w-4" />
-                Delete
-              </button>
-            </div>
-          </article>
-        ))}
+                <div className="relative aspect-[4/3] min-h-48 w-full overflow-hidden bg-slate-100 dark:bg-white/[0.04]">
+                  <img
+                    src={asset(item.imageUrl) || GALLERY_IMAGE_FALLBACK}
+                    alt={item.title || "Gallery image"}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = GALLERY_IMAGE_FALLBACK;
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    aria-label={`Delete ${item.title || "gallery image"}`}
+                    onClick={deleteImage}
+                    className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/95 text-rose-600 shadow-md ring-1 ring-slate-200 transition hover:bg-rose-50 dark:bg-slate-950/90 dark:text-rose-300 dark:ring-white/10"
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="flex flex-1 flex-col justify-between gap-4 p-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-950 dark:text-white">
+                      {item.title || "Untitled image"}
+                    </p>
+
+                    <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      {item.category || "general"}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={deleteImage}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-400/10 dark:text-rose-300"
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                    Delete Image
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

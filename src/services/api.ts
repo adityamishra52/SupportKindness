@@ -12,6 +12,37 @@ function isFrontendHtmlResponse(body: unknown) {
   return sample.includes("<!doctype html") || sample.includes("<html");
 }
 
+function unwrapApiData(body: any): any {
+  let current = body;
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (!current || typeof current !== "object" || !("success" in current)) {
+      return current;
+    }
+
+    if (current.success === false) {
+      throw new AxiosError(
+        typeof current.message === "string" ? current.message : "API request failed.",
+        AxiosError.ERR_BAD_RESPONSE
+      );
+    }
+
+    if ("image" in current) return current.image;
+    if ("images" in current) return current.images;
+    if ("setting" in current) return current.setting;
+    if ("settings" in current) return current.settings;
+
+    if ("data" in current) {
+      current = current.data;
+      continue;
+    }
+
+    return current;
+  }
+
+  return current;
+}
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -61,34 +92,11 @@ api.interceptors.response.use(
       );
     }
 
-    // Handle API responses with success flag
-    if (
-      body &&
-      typeof body === "object" &&
-      "success" in body
-    ) {
-      if (body.success === false) {
-        throw new AxiosError(
-          typeof body.message === "string" ? body.message : "API request failed.",
-          AxiosError.ERR_BAD_RESPONSE,
-          response.config,
-          response.request,
-          response
-        );
-      }
-
-      // Extract appropriate data key from successful response
-      let extractedData = body.data;
-      if (extractedData === undefined && "image" in body) {
-        extractedData = body.image;
-      }
-      if (extractedData === undefined && "images" in body) {
-        extractedData = body.images;
-      }
-
+    if (body && typeof body === "object" && "success" in body) {
+      const extractedData = unwrapApiData(body);
       return {
         ...response,
-        data: extractedData !== undefined ? extractedData : body,
+        data: extractedData !== undefined ? extractedData : null,
       };
     }
 
