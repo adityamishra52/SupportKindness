@@ -95,9 +95,7 @@ export function LeaderboardProvider({ children }: { children: ReactNode }) {
         .filter((entry) => entry.isLeaderboardEntry === true)
         .map(mapEntry);
 
-      if (remoteEntries.length > 0) {
-        setEntries(remoteEntries);
-      }
+      setEntries(remoteEntries);
     } catch {
       // Keep the local fallback when the API is unavailable.
     } finally {

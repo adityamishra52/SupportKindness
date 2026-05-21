@@ -29,7 +29,18 @@ import VolunteerPage from "@/pages/public/VolunteerPage";
 
 function RequireAdmin({ children }: { children: ReactElement }) {
   const auth = localStorage.getItem("cc-admin-auth") === "true";
-  return auth ? children : <Navigate to="/admin/login" replace />;
+  const hasBackendCredential =
+    Boolean(localStorage.getItem("cc-admin-password")) ||
+    Boolean(localStorage.getItem("cc-admin-auth-token"));
+
+  if (!auth || !hasBackendCredential) {
+    localStorage.removeItem("cc-admin-auth");
+    localStorage.removeItem("cc-admin-auth-token");
+    localStorage.removeItem("cc-admin-password");
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  return children;
 }
 
 export function AppRoutes() {

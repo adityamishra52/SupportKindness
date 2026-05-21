@@ -3,9 +3,14 @@ import axios, {
   AxiosHeaders,
   type InternalAxiosRequestConfig,
 } from "axios";
+import { API_BASE_URL } from "@/constants/env";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+function isFrontendHtmlResponse(body: unknown) {
+  if (typeof body !== "string") return false;
+
+  const sample = body.slice(0, 300).toLowerCase();
+  return sample.includes("<!doctype html") || sample.includes("<html");
+}
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -46,15 +51,44 @@ api.interceptors.response.use(
   (response) => {
     const body = response.data;
 
+    if (isFrontendHtmlResponse(body)) {
+      throw new AxiosError(
+        "The API request returned the frontend HTML page. Check VITE_API_BASE_URL in Vercel and point it to the Render backend /api URL.",
+        AxiosError.ERR_BAD_RESPONSE,
+        response.config,
+        response.request,
+        response
+      );
+    }
+
+    // Handle API responses with success flag
     if (
       body &&
       typeof body === "object" &&
-      "success" in body &&
-      "data" in body
+      "success" in body
     ) {
+      if (body.success === false) {
+        throw new AxiosError(
+          typeof body.message === "string" ? body.message : "API request failed.",
+          AxiosError.ERR_BAD_RESPONSE,
+          response.config,
+          response.request,
+          response
+        );
+      }
+
+      // Extract appropriate data key from successful response
+      let extractedData = body.data;
+      if (extractedData === undefined && "image" in body) {
+        extractedData = body.image;
+      }
+      if (extractedData === undefined && "images" in body) {
+        extractedData = body.images;
+      }
+
       return {
         ...response,
-        data: body.data,
+        data: extractedData !== undefined ? extractedData : body,
       };
     }
 
@@ -62,16 +96,11 @@ api.interceptors.response.use(
   },
   (error: AxiosError<any>) => {
     const status = error.response?.status;
-    const requestUrl = error.config?.url || "";
 
     const isAdminPage = window.location.pathname.startsWith("/admin");
     const isLoginPage = window.location.pathname === "/admin/login";
 
-    const isAuthRoute =
-      requestUrl.includes("/admin/login") ||
-      requestUrl.includes("/auth/login");
-
-    if (status === 401 && isAdminPage && isAuthRoute && !isLoginPage) {
+    if (status === 401 && isAdminPage && !isLoginPage) {
       localStorage.removeItem("cc-admin-auth");
       localStorage.removeItem("cc-admin-auth-token");
       localStorage.removeItem("cc-admin-password");

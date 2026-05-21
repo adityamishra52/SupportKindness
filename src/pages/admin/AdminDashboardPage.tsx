@@ -22,6 +22,7 @@ import { api } from "@/services/api";
 import type { Activity, ApiResource, ContactMessage, GalleryItem, SiteSettings, SupportMessage } from "@/types";
 import { asset } from "@/utils/asset";
 import { cn } from "@/utils/cn";
+import { writeLocal } from "@/utils/storage";
 
 type AdminTool = {
   id: "overview" | "support" | "gallery" | "settings";
@@ -183,6 +184,24 @@ function SummaryWidget({ label, value, helper, icon: Icon }: {
 
 const GALLERY_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1522199710521-72d69614c702?w=900&auto=format&fit=crop";
 
+function isGalleryItem(value: unknown): value is GalleryItem {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    typeof (value as GalleryItem)._id === "string" &&
+    typeof (value as GalleryItem).imageUrl === "string"
+  );
+}
+
+function getRequestMessage(error: any, fallback: string) {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    fallback
+  );
+}
+
 function GalleryAdmin({
   gallery,
   showToast,
@@ -231,26 +250,74 @@ function GalleryAdmin({
         formData.append("category", "general");
 
         const response = await api.post<GalleryItem>("/gallery", formData);
-        console.debug("[GalleryAdmin] uploaded image response", response.data);
+        console.debug("[GalleryAdmin] uploaded image response", {
+          responseData: response.data,
+          responseStatus: response.status,
+          hasId: response.data?._id ? "yes" : "no",
+          hasImageUrl: response.data?.imageUrl ? "yes" : "no",
+        });
 
-        if (response.data) {
-          uploadedImages.push(response.data);
+        if (!response.data || typeof response.data !== "object") {
+          console.error("[GalleryAdmin] response is not an object", response.data);
+          throw new Error("Invalid upload response: response data is not an object");
         }
+
+        if (!isGalleryItem(response.data)) {
+          console.error("[GalleryAdmin] isGalleryItem validation failed", {
+            id: (response.data as any)?._id,
+            imageUrl: (response.data as any)?.imageUrl,
+          });
+          throw new Error("Upload did not return a saved gallery image. Missing _id or imageUrl.");
+        }
+
+        uploadedImages.push(response.data);
+        console.debug("[GalleryAdmin] image uploaded", {
+          id: response.data._id,
+          title: response.data.title,
+        });
       }
 
-      setItems((prev) => [...uploadedImages, ...prev]);
+      console.debug("[GalleryAdmin] fetching fresh gallery list", {
+        uploadedCount: uploadedImages.length,
+      });
+
+      const listResponse = await api.get<GalleryItem[]>("/gallery");
+      const freshItems = Array.isArray(listResponse.data)
+        ? listResponse.data.filter(isGalleryItem)
+        : [];
+
+      console.debug("[GalleryAdmin] fresh gallery list", {
+        totalCount: freshItems.length,
+        uploadedIds: uploadedImages.map((img) => img._id),
+        freshIds: freshItems.map((img) => img._id),
+      });
+
+      const missingSavedImages = uploadedImages.filter(
+        (image) => !freshItems.some((item) => item._id === image._id)
+      );
+
+      if (missingSavedImages.length > 0) {
+        console.error("[GalleryAdmin] missing images after upload", {
+          missing: missingSavedImages.map((img) => img._id),
+        });
+        throw new Error(
+          `Upload reached the server, but ${missingSavedImages.length} image(s) were not found in the saved gallery list.`
+        );
+      }
+
+      gallery.setData(freshItems);
+      writeLocal(STORE_KEYS.gallery, freshItems);
+      setItems(freshItems);
       setFiles([]);
 
-      await gallery.reload();
-
-      showToast("Image uploaded successfully.");
+      showToast(
+        uploadedImages.length === 1
+          ? "Image uploaded successfully."
+          : "Images uploaded successfully."
+      );
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        "Upload failed. Please check backend upload settings.";
-
-      showToast(message);
+      console.error("[GalleryAdmin] upload error", error);
+      showToast(getRequestMessage(error, "Upload failed. Please check backend upload settings."));
     } finally {
       setUploading(false);
     }
@@ -342,18 +409,21 @@ function GalleryAdmin({
                 onClick={async () => {
                   try {
                     await api.delete(`/gallery/${item._id}`);
-                    setItems((prev) =>
-                      prev.filter((image) => image._id !== item._id)
-                    );
-                    await gallery.reload();
+                    const listResponse = await api.get<GalleryItem[]>("/gallery");
+                    const freshItems = Array.isArray(listResponse.data)
+                      ? listResponse.data.filter(isGalleryItem)
+                      : [];
+
+                    if (freshItems.some((image) => image._id === item._id)) {
+                      throw new Error("Delete reached the server, but the image still exists in the gallery list.");
+                    }
+
+                    gallery.setData(freshItems);
+                    writeLocal(STORE_KEYS.gallery, freshItems);
+                    setItems(freshItems);
                     showToast("Image deleted.");
                   } catch (error: any) {
-                    const message =
-                      error?.response?.data?.message ||
-                      error?.response?.data?.error ||
-                      "Delete failed. Please check admin credentials.";
-
-                    showToast(message);
+                    showToast(getRequestMessage(error, "Delete failed. Please check admin credentials."));
                   }
                 }}
                 className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-400/10 dark:text-rose-300"
@@ -389,17 +459,36 @@ function SupportSettingForm({ settings, reload, showToast }: {
       className="grid gap-5 lg:grid-cols-[1fr_0.8fr]"
       onSubmit={async (event) => {
         event.preventDefault();
+
+        const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+        const maxSize = 5 * 1024 * 1024;
+
+        if (file && !allowedTypes.includes(file.type)) {
+          showToast("Only JPG, PNG, and WEBP QR images are allowed.");
+          return;
+        }
+
+        if (file && file.size > maxSize) {
+          showToast("QR image size must be less than 5MB.");
+          return;
+        }
+
         try {
           setSaving(true);
           const body = new FormData();
           body.append("upiId", upiId);
           body.append("paymentInstructions", paymentInstructions);
           if (file) body.append("qrImage", file);
-          await api.put("/transparency/settings", body);
+          const response = await api.put<SiteSettings>("/transparency/settings", body);
+          if (!response.data || typeof response.data !== "object") {
+            throw new Error("Settings were not saved by the backend.");
+          }
+          writeLocal(STORE_KEYS.settings, response.data);
+          setFile(null);
           await reload();
           showToast("Settings updated");
-        } catch {
-          showToast("Settings save failed. Please check admin credentials and backend connection.");
+        } catch (error: any) {
+          showToast(getRequestMessage(error, "Settings save failed. Please check admin credentials and backend connection."));
         } finally {
           setSaving(false);
         }
@@ -418,7 +507,7 @@ function SupportSettingForm({ settings, reload, showToast }: {
       <div className="flex flex-col justify-between rounded-3xl bg-slate-50 p-5 dark:bg-white/[0.03]">
         <label className="block">
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">QR Image</span>
-          <input type="file" accept="image/*" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950" />
+          <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950" />
         </label>
         <button type="submit" disabled={saving} className="mt-6 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
           {saving ? "Saving..." : "Save Settings"}
