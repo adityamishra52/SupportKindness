@@ -82,6 +82,50 @@ export default function HomePage() {
     (sum, report) => sum + (report.totalSupportReceived || 0),
     0
   );
+  const fallbackImpactStats = useMemo(
+    () => [
+      {
+        label: "Meals Distributed",
+        value:
+          activities.filter((item) =>
+            item.category.toLowerCase().includes("food")
+          ).length *
+            95 +
+          320,
+      },
+      {
+        label: "Animals Helped",
+        value:
+          activities.filter((item) =>
+            item.category.toLowerCase().includes("animal")
+          ).length *
+            68 +
+          180,
+      },
+      {
+        label: "Trees Planted",
+        value:
+          activities.filter((item) =>
+            item.category.toLowerCase().includes("tree")
+          ).length *
+            48 +
+          140,
+      },
+      {
+        label: "Families Supported",
+        value: Math.max(activities.length, 1) * 22 + 50,
+      },
+      {
+        label: "Support Tracked",
+        value: monthlyReceived || Math.max(activities.length, 1) * 18 + 36,
+      },
+    ],
+    [activities, monthlyReceived]
+  );
+  const impactStats =
+    settings?.impactStats?.filter((item) => item.label && Number.isFinite(Number(item.value)))?.length
+      ? settings.impactStats.filter((item) => item.label && Number.isFinite(Number(item.value)))
+      : fallbackImpactStats;
 
   const topGallery = gallery.slice(0, 8);
 
@@ -202,48 +246,9 @@ export default function HomePage() {
         subtitle="Measured progress from field work and monthly support updates."
       >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Counter
-            label="Meals Distributed"
-            value={
-              activities.filter((item) =>
-                item.category.toLowerCase().includes("food")
-              ).length *
-                95 +
-              320
-            }
-          />
-
-          <Counter
-            label="Animals Helped"
-            value={
-              activities.filter((item) =>
-                item.category.toLowerCase().includes("animal")
-              ).length *
-                68 +
-              180
-            }
-          />
-
-          <Counter
-            label="Trees Planted"
-            value={
-              activities.filter((item) =>
-                item.category.toLowerCase().includes("tree")
-              ).length *
-                48 +
-              140
-            }
-          />
-
-          <Counter
-            label="Families Supported"
-            value={Math.max(activities.length, 1) * 22 + 50}
-          />
-
-          <Counter
-            label="Support Tracked"
-            value={monthlyReceived || Math.max(activities.length, 1) * 18 + 36}
-          />
+          {impactStats.map((stat) => (
+            <Counter key={stat.label} label={stat.label} value={Number(stat.value) || 0} />
+          ))}
         </div>
       </Section>
 

@@ -48,6 +48,10 @@ export type TransparencyReport = {
 export type SiteSettings = {
   upiId: string;
   qrImageUrl?: string;
+  impactStats?: Array<{
+    label: string;
+    value: number;
+  }>;
   disclaimer?: string;
   paymentInstructions?: string;
 };

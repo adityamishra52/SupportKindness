@@ -33,7 +33,7 @@ import { cn } from "@/utils/cn";
 import { writeLocal } from "@/utils/storage";
 
 type AdminTool = {
-  id: "overview" | "support" | "campaigns" | "gallery" | "faqs" | "testimonials" | "reports" | "inbox" | "settings";
+  id: "overview" | "support" | "campaigns" | "impact" | "gallery" | "faqs" | "testimonials" | "reports" | "inbox" | "settings";
   title: string;
   description: string;
   badge: string;
@@ -215,6 +215,21 @@ function getRequestMessage(error: any, fallback: string) {
   );
 }
 
+function sameImpactStats(
+  expected: Array<{ label: string; value: number }>,
+  actual?: Array<{ label: string; value: number }>
+) {
+  if (!Array.isArray(actual) || expected.length !== actual.length) return false;
+
+  return expected.every((item, index) => {
+    const actualItem = actual[index];
+    return (
+      actualItem?.label === item.label &&
+      Number(actualItem?.value || 0) === Number(item.value || 0)
+    );
+  });
+}
+
 const CAMPAIGN_CATEGORIES = ["Animal Help", "Food Distribution", "Tree Plantation", "Community Support"];
 
 function isActivityItem(value: unknown): value is Activity {
@@ -335,6 +350,7 @@ function TestimonialAdmin({ testimonials, showToast }: { testimonials: ApiResour
     const fresh = Array.isArray(response.data) ? response.data : [];
     testimonials.setData(fresh);
     writeLocal(STORE_KEYS.testimonials, fresh);
+    return fresh;
   };
 
   const reset = () => {
@@ -360,15 +376,22 @@ function TestimonialAdmin({ testimonials, showToast }: { testimonials: ApiResour
       if (avatar) body.append("avatar", avatar);
       if (editingId) {
         await api.put(`/testimonials/${editingId}`, body);
-        showToast("Testimonial updated.");
       } else {
         await api.post("/testimonials", body);
-        showToast("Testimonial added.");
       }
-      await refresh();
+      const fresh = await refresh();
+      const saved = fresh.some((item) =>
+        editingId
+          ? item._id === editingId && item.name === name.trim() && item.content === content.trim()
+          : item.name === name.trim() && item.content === content.trim()
+      );
+      if (!saved) {
+        throw new Error("The testimonial request completed, but the saved item was not found after refresh.");
+      }
+      showToast(editingId ? "Trusted community story updated." : "Trusted community story added.");
       reset();
     } catch (error: any) {
-      showToast(getRequestMessage(error, "Unable to save testimonial."));
+      showToast(getRequestMessage(error, "Unable to save trusted community story."));
     } finally {
       setSaving(false);
     }
@@ -377,16 +400,21 @@ function TestimonialAdmin({ testimonials, showToast }: { testimonials: ApiResour
   return (
     <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
       <form onSubmit={save} className="space-y-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/[0.03]">
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
-        <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="Role" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
-        <textarea rows={5} value={content} onChange={(event) => setContent(event.target.value)} placeholder="Testimonial content" className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <div className="rounded-2xl bg-cyan-50/60 p-4 text-sm leading-6 text-cyan-900 dark:bg-cyan-400/10 dark:text-cyan-100">
+          These cards appear in the home page section named "Trusted By The Community".
+        </div>
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Community Supporter" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="Volunteer, Monthly Supporter..." className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <textarea rows={5} value={content} onChange={(event) => setContent(event.target.value)} placeholder="Write the community quote shown on the home page..." className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
         <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => setAvatar(event.target.files?.[0] || null)} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950" />
         <div className="grid gap-2 sm:grid-cols-2">
-          <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"><FiSave className="h-4 w-4" />{saving ? "Saving..." : editingId ? "Update" : "Add Testimonial"}</button>
+          <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"><FiSave className="h-4 w-4" />{saving ? "Saving..." : editingId ? "Update Story" : "Add Story"}</button>
           {editingId && <button type="button" onClick={reset} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">Cancel</button>}
         </div>
       </form>
       <div className="grid max-h-[42rem] content-start gap-3 overflow-y-auto pr-2">
+        {testimonials.loading && testimonials.data.length === 0 && <div className="h-24 animate-pulse rounded-2xl bg-slate-100 dark:bg-white/[0.06]" />}
+        {!testimonials.loading && testimonials.data.length === 0 && <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500 dark:bg-white/[0.03]">No trusted community stories yet.</div>}
         {testimonials.data.map((item) => (
           <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d1117]">
             <p className="font-bold text-slate-950 dark:text-white">{item.name}</p>
@@ -394,7 +422,7 @@ function TestimonialAdmin({ testimonials, showToast }: { testimonials: ApiResour
             <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.content}</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => { setEditingId(item._id); setName(item.name); setRole(item.role || ""); setContent(item.content); setAvatar(null); }} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">Edit</button>
-              <button type="button" onClick={async () => { try { await api.delete(`/testimonials/${item._id}`); await refresh(); showToast("Testimonial deleted."); } catch (error: any) { showToast(getRequestMessage(error, "Unable to delete testimonial.")); } }} className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 dark:bg-rose-400/10 dark:text-rose-300">Delete</button>
+              <button type="button" onClick={async () => { try { await api.delete(`/testimonials/${item._id}`); await refresh(); showToast("Trusted community story deleted."); } catch (error: any) { showToast(getRequestMessage(error, "Unable to delete trusted community story.")); } }} className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 dark:bg-rose-400/10 dark:text-rose-300">Delete</button>
             </div>
           </article>
         ))}
@@ -1411,6 +1439,141 @@ function SupportSettingForm({ settings, reload, showToast }: {
   );
 }
 
+const defaultImpactStats = [
+  { label: "Meals Distributed", value: 320 },
+  { label: "Animals Helped", value: 248 },
+  { label: "Trees Planted", value: 140 },
+  { label: "Families Supported", value: 72 },
+  { label: "Support Tracked", value: 54 },
+];
+
+function ImpactSettingsForm({ settings, reload, showToast }: {
+  settings: SiteSettings | null;
+  reload: () => Promise<void>;
+  showToast: (message: string) => void;
+}) {
+  const [stats, setStats] = useState(defaultImpactStats);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const savedStats = settings?.impactStats?.filter((item) => item.label);
+    setStats(savedStats?.length ? savedStats.map((item) => ({
+      label: item.label,
+      value: Number(item.value) || 0,
+    })) : defaultImpactStats);
+  }, [settings]);
+
+  const updateStat = (index: number, field: "label" | "value", value: string) => {
+    setStats((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: field === "value" ? Math.max(0, Number(value || 0)) : value,
+            }
+          : item
+      )
+    );
+  };
+
+  const addStat = () => {
+    setStats((current) => [...current, { label: "New Statistic", value: 0 }].slice(0, 8));
+  };
+
+  const removeStat = (index: number) => {
+    setStats((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  return (
+    <form
+      className="space-y-5"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        const cleanStats = stats
+          .map((item) => ({ label: item.label.trim(), value: Math.max(0, Number(item.value) || 0) }))
+          .filter((item) => item.label);
+
+        if (cleanStats.length === 0) {
+          showToast("Add at least one impact statistic.");
+          return;
+        }
+
+        try {
+          setSaving(true);
+          await api.put<SiteSettings>("/transparency/settings", { impactStats: cleanStats });
+          const response = await api.get<SiteSettings>("/transparency/settings");
+          if (!sameImpactStats(cleanStats, response.data?.impactStats)) {
+            throw new Error("The backend accepted the request, but the impact statistics were not saved after refresh. Please restart/redeploy the backend with the latest settings API.");
+          }
+          writeLocal(STORE_KEYS.settings, response.data);
+          await reload();
+          showToast("Impact statistics updated.");
+        } catch (error: any) {
+          showToast(getRequestMessage(error, "Impact statistics save failed. Please check admin credentials and backend connection."));
+        } finally {
+          setSaving(false);
+        }
+      }}
+    >
+      <div className="rounded-2xl bg-cyan-50/60 p-4 text-sm leading-6 text-cyan-900 dark:bg-cyan-400/10 dark:text-cyan-100">
+        These values power the public Impact Statistics section on the home page. Keep labels short so the cards stay clean on mobile.
+      </div>
+
+      <div className="space-y-3">
+        {stats.map((item, index) => (
+          <div key={index} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03] md:grid-cols-[1fr_10rem_auto]">
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Label</span>
+              <input
+                value={item.label}
+                onChange={(event) => updateStat(index, "label", event.target.value)}
+                placeholder="Meals Distributed"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-cyan-400/10"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Value</span>
+              <input
+                type="number"
+                min="0"
+                value={item.value}
+                onChange={(event) => updateStat(index, "value", event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-cyan-400/10"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => removeStat(index)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-400/10 dark:text-rose-300 md:mt-6"
+              aria-label={`Remove ${item.label || "impact statistic"}`}
+            >
+              <FiTrash2 className="h-4 w-4" /> Remove
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={addStat}
+          disabled={stats.length >= 8}
+          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
+        >
+          <FiPlusCircle className="h-4 w-4" /> Add Statistic
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+        >
+          <FiSave className="h-4 w-4" /> {saving ? "Saving..." : "Save Impact Statistics"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function formatDate(value?: string) {
   if (!value) return "Recently";
   const date = new Date(value);
@@ -1437,9 +1600,10 @@ export default function AdminDashboardPage() {
     { id: "overview", title: "Overview", description: "Live health, activity, and operational snapshot.", badge: "Live", action: "Review", icon: FiTrendingUp },
     { id: "support", title: "Support Leaderboard", description: "Manage donation recognition and supporter entries.", badge: "Public", action: "Manage", icon: FiUsers },
     { id: "campaigns", title: "Campaigns", description: "Add, edit, and remove public campaign records.", badge: `${activities.data.length} items`, action: "Manage", icon: FiPlusCircle },
+    { id: "impact", title: "Impact Statistics", description: "Modify public home page counter labels and values.", badge: `${settings.data?.impactStats?.length || 5} counters`, action: "Edit", icon: FiTrendingUp },
     { id: "gallery", title: "Gallery Upload", description: "Upload, review, and remove public gallery media.", badge: `${gallery.data.length} items`, action: "Open", icon: FiImage },
     { id: "faqs", title: "FAQs", description: "Add and modify public question answers.", badge: `${faqs.data.length} items`, action: "Edit", icon: FiHelpCircle },
-    { id: "testimonials", title: "Testimonials", description: "Manage public community feedback.", badge: `${testimonials.data.length} items`, action: "Edit", icon: FiStar },
+    { id: "testimonials", title: "Trusted Community", description: "Modify home page trusted community cards.", badge: `${testimonials.data.length} items`, action: "Edit", icon: FiStar },
     { id: "reports", title: "Reports", description: "Manage transparency report updates.", badge: `${reports.data.length} items`, action: "Edit", icon: FiFileText },
     { id: "inbox", title: "Inbox", description: "Review and remove contact messages.", badge: `${contactMessages.data.filter((item) => !item.isRead).length} unread`, action: "Open", icon: FiMessageSquare },
     { id: "settings", title: "Payment Settings", description: "Update UPI, QR code, and payment instructions.", badge: "Secure", action: "Configure", icon: FiSettings },
@@ -1550,6 +1714,12 @@ export default function AdminDashboardPage() {
             </Surface>
           )}
 
+          {selectedTool === "impact" && (
+            <Surface eyebrow="Home Page" title="Impact Statistics Manager">
+              <ImpactSettingsForm settings={settings.data} reload={settings.reload} showToast={showToast} />
+            </Surface>
+          )}
+
           {selectedTool === "faqs" && (
             <Surface eyebrow="Content" title="FAQ Manager">
               <FAQAdmin faqs={faqs} showToast={showToast} />
@@ -1557,7 +1727,7 @@ export default function AdminDashboardPage() {
           )}
 
           {selectedTool === "testimonials" && (
-            <Surface eyebrow="Content" title="Testimonial Manager">
+            <Surface eyebrow="Home Page" title="Trusted By The Community Manager">
               <TestimonialAdmin testimonials={testimonials} showToast={showToast} />
             </Surface>
           )}

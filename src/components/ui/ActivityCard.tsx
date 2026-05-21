@@ -13,13 +13,15 @@ export function ActivityCard({ item }: { item: Activity }) {
     item.description.length > 110
       ? `${item.description.slice(0, 110).trim()}...`
       : item.description;
-  const formattedDate = item.date
-    ? new Intl.DateTimeFormat("en", {
+  const campaignDate = item.date ? new Date(item.date) : null;
+  const formattedDate =
+    campaignDate && !Number.isNaN(campaignDate.getTime())
+      ? new Intl.DateTimeFormat("en", {
         day: "numeric",
         month: "short",
         year: "numeric",
-      }).format(new Date(item.date))
-    : null;
+      }).format(campaignDate)
+      : null;
 
   return (
     <>
