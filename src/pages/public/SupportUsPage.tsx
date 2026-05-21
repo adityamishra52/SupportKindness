@@ -661,7 +661,7 @@ export default function SupportUsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] flex min-h-dvh items-center justify-center overflow-y-auto bg-black/65 p-3 backdrop-blur-sm sm:p-5"
             onClick={() => setOpenQr(false)}
           >
             <motion.div
@@ -680,14 +680,14 @@ export default function SupportUsPage() {
                 y: 20,
                 scale: 0.96,
               }}
-              className={`relative mx-auto max-w-2xl overflow-hidden rounded-[2rem] ${glassCardStrong}`}
+              className={`relative my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[min(92vw,34rem)] flex-col overflow-hidden rounded-[1.5rem] ${glassCardStrong} sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-[2rem]`}
               onClick={(event) =>
                 event.stopPropagation()
               }
             >
-              <div className="flex items-center justify-between border-b border-slate-200 p-5 dark:border-white/10">
+              <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 p-4 dark:border-white/10 sm:p-5">
                 <div>
-                  <p className="text-sm uppercase tracking-[0.35em] text-cyan-500 dark:text-cyan-300">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-500 dark:text-cyan-300 sm:text-sm sm:tracking-[0.3em]">
                     Scan to support
                   </p>
 
@@ -704,12 +704,12 @@ export default function SupportUsPage() {
                 </button>
               </div>
 
-              <div className="p-8">
-                <div className="overflow-hidden rounded-[2rem] bg-slate-100 p-6 dark:bg-slate-900">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                <div className="mx-auto flex aspect-square w-full max-w-[min(74vw,22rem,58dvh)] items-center justify-center overflow-hidden rounded-[1.5rem] bg-slate-100 p-3 dark:bg-slate-900 sm:max-w-[min(70vw,28rem,62dvh)] sm:rounded-[2rem] sm:p-5">
                   <img
                     src={selectedQr}
                     alt="Support QR"
-                    className="w-full object-contain"
+                    className="h-full w-full object-contain"
                   />
                 </div>
               </div>

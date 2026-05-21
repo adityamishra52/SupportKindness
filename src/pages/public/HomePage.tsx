@@ -65,7 +65,6 @@ export default function HomePage() {
 
   const upiId = settings?.upiId || ENV_UPI_ID;
 
-  const featured = activities.filter((item) => item.featured).slice(0, 6);
   const campaignCategories = useMemo(
     () => ["All", ...Array.from(new Set(activities.map((item) => item.category))).slice(0, 5)],
     [activities]
@@ -290,17 +289,6 @@ export default function HomePage() {
             ))}
           </div>
         )}
-      </Section>
-
-      <Section
-        title="Recent Activities"
-        subtitle="Fresh updates from the latest field work and community care actions."
-      >
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {(featured.length > 0 ? featured : activities.slice(0, 3)).map((activity) => (
-            <ActivityCard key={activity._id} item={activity} />
-          ))}
-        </div>
       </Section>
 
       <Section

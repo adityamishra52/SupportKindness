@@ -6,9 +6,14 @@ import {
   FiCheckCircle,
   FiDollarSign,
   FiEdit3,
+  FiFileText,
+  FiHelpCircle,
   FiImage,
   FiInbox,
+  FiMessageSquare,
+  FiPlusCircle,
   FiSave,
+  FiStar,
   FiSettings,
   FiTrash2,
   FiTrendingUp,
@@ -22,13 +27,13 @@ import { STORE_KEYS } from "@/constants/storeKeys";
 import { useToast } from "@/context/ToastContext";
 import { useApiData } from "@/hooks/useApiData";
 import { api } from "@/services/api";
-import type { Activity, ApiResource, ContactMessage, GalleryItem, SiteSettings, SupportMessage } from "@/types";
+import type { Activity, ApiResource, ContactMessage, FAQItem, GalleryItem, SiteSettings, SupportMessage, Testimonial, TransparencyReport } from "@/types";
 import { asset } from "@/utils/asset";
 import { cn } from "@/utils/cn";
 import { writeLocal } from "@/utils/storage";
 
 type AdminTool = {
-  id: "overview" | "support" | "gallery" | "settings";
+  id: "overview" | "support" | "campaigns" | "gallery" | "faqs" | "testimonials" | "reports" | "inbox" | "settings";
   title: string;
   description: string;
   badge: string;
@@ -207,6 +212,586 @@ function getRequestMessage(error: any, fallback: string) {
     error?.response?.data?.error ||
     error?.message ||
     fallback
+  );
+}
+
+const CAMPAIGN_CATEGORIES = ["Animal Help", "Food Distribution", "Tree Plantation", "Community Support"];
+
+function isActivityItem(value: unknown): value is Activity {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    typeof (value as Activity)._id === "string" &&
+    typeof (value as Activity).title === "string"
+  );
+}
+
+function FAQAdmin({ faqs, showToast }: { faqs: ApiResource<FAQItem[]>; showToast: (message: string) => void }) {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [category, setCategory] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const refresh = async () => {
+    const response = await api.get<FAQItem[]>("/faqs");
+    const fresh = Array.isArray(response.data) ? response.data : [];
+    faqs.setData(fresh);
+    writeLocal(STORE_KEYS.faqs, fresh);
+    return fresh;
+  };
+
+  const reset = () => {
+    setQuestion("");
+    setAnswer("");
+    setCategory("");
+    setEditingId(null);
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!question.trim() || !answer.trim()) {
+      showToast("Please enter both question and answer.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const payload = { question: question.trim(), answer: answer.trim(), category: category.trim() };
+      if (editingId) {
+        await api.put(`/faqs/${editingId}`, payload);
+        showToast("FAQ updated.");
+      } else {
+        await api.post("/faqs", payload);
+        showToast("FAQ added.");
+      }
+      await refresh();
+      reset();
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Unable to save FAQ. Please check admin credentials."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEdit = (item: FAQItem) => {
+    setEditingId(item._id);
+    setQuestion(item.question || "");
+    setAnswer(item.answer || "");
+    setCategory(item.category || "");
+  };
+
+  const remove = async (item: FAQItem) => {
+    try {
+      await api.delete(`/faqs/${item._id}`);
+      await refresh();
+      if (editingId === item._id) reset();
+      showToast("FAQ deleted.");
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Unable to delete FAQ. Please check admin credentials."));
+    }
+  };
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <form onSubmit={save} className="space-y-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+        <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Question</span><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="How are donations used?" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" /></label>
+        <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Answer</span><textarea rows={6} value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Write the answer shown on the FAQ page..." className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" /></label>
+        <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Category</span><input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="General, donations, volunteer..." className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" /></label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"><FiSave className="h-4 w-4" />{saving ? "Saving..." : editingId ? "Update FAQ" : "Add FAQ"}</button>
+          {editingId && <button type="button" onClick={reset} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200"><FiX className="h-4 w-4" />Cancel</button>}
+        </div>
+      </form>
+      <div className="grid max-h-[42rem] content-start gap-3 overflow-y-auto pr-2">
+        {faqs.loading && faqs.data.length === 0 && <div className="h-24 animate-pulse rounded-2xl bg-slate-100 dark:bg-white/[0.06]" />}
+        {!faqs.loading && faqs.data.length === 0 && <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500 dark:bg-white/[0.03]">No FAQs yet.</div>}
+        {faqs.data.map((item) => (
+          <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d1117]">
+            <p className="font-bold text-slate-950 dark:text-white">{item.question}</p>
+            <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.answer}</p>
+            {item.category && <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">{item.category}</p>}
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => startEdit(item)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200"><FiEdit3 className="h-4 w-4" />Edit</button>
+              <button type="button" onClick={() => remove(item)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 dark:bg-rose-400/10 dark:text-rose-300"><FiTrash2 className="h-4 w-4" />Delete</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TestimonialAdmin({ testimonials, showToast }: { testimonials: ApiResource<Testimonial[]>; showToast: (message: string) => void }) {
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [content, setContent] = useState("");
+  const [avatar, setAvatar] = useState<File | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const refresh = async () => {
+    const response = await api.get<Testimonial[]>("/testimonials");
+    const fresh = Array.isArray(response.data) ? response.data : [];
+    testimonials.setData(fresh);
+    writeLocal(STORE_KEYS.testimonials, fresh);
+  };
+
+  const reset = () => {
+    setName("");
+    setRole("");
+    setContent("");
+    setAvatar(null);
+    setEditingId(null);
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim() || !content.trim()) {
+      showToast("Please enter testimonial name and content.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const body = new FormData();
+      body.append("name", name.trim());
+      body.append("role", role.trim());
+      body.append("content", content.trim());
+      if (avatar) body.append("avatar", avatar);
+      if (editingId) {
+        await api.put(`/testimonials/${editingId}`, body);
+        showToast("Testimonial updated.");
+      } else {
+        await api.post("/testimonials", body);
+        showToast("Testimonial added.");
+      }
+      await refresh();
+      reset();
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Unable to save testimonial."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <form onSubmit={save} className="space-y-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="Role" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <textarea rows={5} value={content} onChange={(event) => setContent(event.target.value)} placeholder="Testimonial content" className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => setAvatar(event.target.files?.[0] || null)} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950" />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"><FiSave className="h-4 w-4" />{saving ? "Saving..." : editingId ? "Update" : "Add Testimonial"}</button>
+          {editingId && <button type="button" onClick={reset} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">Cancel</button>}
+        </div>
+      </form>
+      <div className="grid max-h-[42rem] content-start gap-3 overflow-y-auto pr-2">
+        {testimonials.data.map((item) => (
+          <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d1117]">
+            <p className="font-bold text-slate-950 dark:text-white">{item.name}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">{item.role || "Community"}</p>
+            <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.content}</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => { setEditingId(item._id); setName(item.name); setRole(item.role || ""); setContent(item.content); setAvatar(null); }} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">Edit</button>
+              <button type="button" onClick={async () => { try { await api.delete(`/testimonials/${item._id}`); await refresh(); showToast("Testimonial deleted."); } catch (error: any) { showToast(getRequestMessage(error, "Unable to delete testimonial.")); } }} className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 dark:bg-rose-400/10 dark:text-rose-300">Delete</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReportAdmin({ reports, showToast }: { reports: ApiResource<TransparencyReport[]>; showToast: (message: string) => void }) {
+  const [month, setMonth] = useState("");
+  const [summary, setSummary] = useState("");
+  const [fundUsageDescription, setFundUsageDescription] = useState("");
+  const [totalSupportReceived, setTotalSupportReceived] = useState("");
+  const [totalSupportUsed, setTotalSupportUsed] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const refresh = async () => {
+    const response = await api.get<TransparencyReport[]>("/transparency/reports");
+    const fresh = Array.isArray(response.data) ? response.data : [];
+    reports.setData(fresh);
+    writeLocal(STORE_KEYS.reports, fresh);
+  };
+
+  const reset = () => {
+    setMonth("");
+    setSummary("");
+    setFundUsageDescription("");
+    setTotalSupportReceived("");
+    setTotalSupportUsed("");
+    setImage(null);
+    setEditingId(null);
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!month.trim() || !summary.trim()) {
+      showToast("Please enter report month and summary.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const body = new FormData();
+      body.append("month", month.trim());
+      body.append("summary", summary.trim());
+      body.append("fundUsageDescription", fundUsageDescription.trim());
+      body.append("totalSupportReceived", String(Number(totalSupportReceived || 0)));
+      body.append("totalSupportUsed", String(Number(totalSupportUsed || 0)));
+      if (image) body.append("image", image);
+      if (editingId) {
+        await api.put(`/transparency/reports/${editingId}`, body);
+        showToast("Transparency report updated.");
+      } else {
+        await api.post("/transparency/reports", body);
+        showToast("Transparency report added.");
+      }
+      await refresh();
+      reset();
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Unable to save transparency report."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <form onSubmit={save} className="space-y-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+        <input value={month} onChange={(event) => setMonth(event.target.value)} placeholder="Month, e.g. May 2026" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <textarea rows={4} value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Monthly summary" className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <textarea rows={3} value={fundUsageDescription} onChange={(event) => setFundUsageDescription(event.target.value)} placeholder="Fund usage description" className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input type="number" value={totalSupportReceived} onChange={(event) => setTotalSupportReceived(event.target.value)} placeholder="Support received" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+          <input type="number" value={totalSupportUsed} onChange={(event) => setTotalSupportUsed(event.target.value)} placeholder="Support used" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        </div>
+        <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => setImage(event.target.files?.[0] || null)} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950" />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"><FiSave className="h-4 w-4" />{saving ? "Saving..." : editingId ? "Update Report" : "Add Report"}</button>
+          {editingId && <button type="button" onClick={reset} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">Cancel</button>}
+        </div>
+      </form>
+      <div className="grid max-h-[42rem] content-start gap-3 overflow-y-auto pr-2">
+        {reports.data.map((item) => (
+          <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d1117]">
+            <p className="font-bold text-slate-950 dark:text-white">{item.month}</p>
+            <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.summary}</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Received: {item.totalSupportReceived || 0} | Used: {item.totalSupportUsed || 0}</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => { setEditingId(item._id); setMonth(item.month); setSummary(item.summary); setFundUsageDescription(item.fundUsageDescription || ""); setTotalSupportReceived(String(item.totalSupportReceived || "")); setTotalSupportUsed(String(item.totalSupportUsed || "")); setImage(null); }} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">Edit</button>
+              <button type="button" onClick={async () => { try { await api.delete(`/transparency/reports/${item._id}`); await refresh(); showToast("Report deleted."); } catch (error: any) { showToast(getRequestMessage(error, "Unable to delete report.")); } }} className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 dark:bg-rose-400/10 dark:text-rose-300">Delete</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InboxAdmin({ messages, showToast }: { messages: ApiResource<ContactMessage[]>; showToast: (message: string) => void }) {
+  const refresh = async () => {
+    const response = await api.get<ContactMessage[]>("/contact");
+    const fresh = Array.isArray(response.data) ? response.data : [];
+    messages.setData(fresh);
+    writeLocal(STORE_KEYS.contacts, fresh);
+  };
+
+  return (
+    <div className="grid max-h-[46rem] content-start gap-3 overflow-y-auto pr-2">
+      {messages.data.length === 0 && <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500 dark:bg-white/[0.03]">No contact messages.</div>}
+      {messages.data.map((item) => (
+        <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d1117]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-bold text-slate-950 dark:text-white">{item.name}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{item.email}{item.phone ? ` | ${item.phone}` : ""}</p>
+            </div>
+            <span className={cn("w-fit rounded-full px-2.5 py-1 text-xs font-bold", item.isRead ? "bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300" : "bg-cyan-50 text-cyan-700 dark:bg-cyan-400/10 dark:text-cyan-300")}>{item.isRead ? "Read" : "Unread"}</span>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">{item.message}</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={async () => { try { await api.patch(`/contact/${item._id}/read`, { isRead: !item.isRead }); await refresh(); showToast(item.isRead ? "Marked unread." : "Marked read."); } catch (error: any) { showToast(getRequestMessage(error, "Unable to update message.")); } }} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">{item.isRead ? "Mark Unread" : "Mark Read"}</button>
+            <button type="button" onClick={async () => { try { await api.delete(`/contact/${item._id}`); await refresh(); showToast("Message deleted."); } catch (error: any) { showToast(getRequestMessage(error, "Unable to delete message.")); } }} className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 dark:bg-rose-400/10 dark:text-rose-300">Delete</button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function CampaignAdmin({
+  activities,
+  showToast,
+}: {
+  activities: ApiResource<Activity[]>;
+  showToast: (message: string) => void;
+}) {
+  const [items, setItems] = useState<Activity[]>([]);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState(CAMPAIGN_CATEGORIES[0]);
+  const [customCategory, setCustomCategory] = useState("");
+  const [description, setDescription] = useState("");
+  const [location, setLocation] = useState("");
+  const [date, setDate] = useState("");
+  const [featured, setFeatured] = useState(false);
+  const [images, setImages] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCategory, setEditCategory] = useState(CAMPAIGN_CATEGORIES[0]);
+  const [editCustomCategory, setEditCustomCategory] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editFeatured, setEditFeatured] = useState(false);
+  const [editImages, setEditImages] = useState<File[]>([]);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setItems(Array.isArray(activities.data) ? activities.data : []);
+  }, [activities.data]);
+
+  const resolveCampaignCategory = (value: string, customValue: string) =>
+    (value === "custom" ? customValue : value).trim() || "Community Support";
+
+  const refreshCampaigns = async () => {
+    const response = await api.get<Activity[]>("/activities");
+    const freshItems = Array.isArray(response.data)
+      ? response.data.filter(isActivityItem)
+      : [];
+    activities.setData(freshItems);
+    writeLocal(STORE_KEYS.activities, freshItems);
+    setItems(freshItems);
+    return freshItems;
+  };
+
+  const resetCreateForm = () => {
+    setTitle("");
+    setCategory(CAMPAIGN_CATEGORIES[0]);
+    setCustomCategory("");
+    setDescription("");
+    setLocation("");
+    setDate("");
+    setFeatured(false);
+    setImages([]);
+  };
+
+  const startEdit = (item: Activity) => {
+    const knownCategory = CAMPAIGN_CATEGORIES.includes(item.category) ? item.category : "custom";
+    setEditingId(item._id);
+    setEditTitle(item.title || "");
+    setEditCategory(knownCategory);
+    setEditCustomCategory(knownCategory === "custom" ? item.category : "");
+    setEditDescription(item.description || "");
+    setEditLocation(item.location || "");
+    setEditDate(item.date ? new Date(item.date).toISOString().slice(0, 10) : "");
+    setEditFeatured(Boolean(item.featured));
+    setEditImages([]);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditImages([]);
+  };
+
+  const appendCampaignFields = (formData: FormData, payload: {
+    title: string;
+    category: string;
+    customCategory: string;
+    description: string;
+    location: string;
+    date: string;
+    featured: boolean;
+    images: File[];
+  }) => {
+    formData.append("title", payload.title.trim());
+    formData.append("category", resolveCampaignCategory(payload.category, payload.customCategory));
+    formData.append("description", payload.description.trim());
+    formData.append("location", payload.location.trim());
+    formData.append("featured", String(payload.featured));
+    if (payload.date) formData.append("date", payload.date);
+    payload.images.forEach((file) => formData.append("images", file));
+  };
+
+  const createCampaign = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!title.trim() || !description.trim()) {
+      showToast("Please enter campaign title and description.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const body = new FormData();
+      appendCampaignFields(body, {
+        title,
+        category,
+        customCategory,
+        description,
+        location,
+        date,
+        featured,
+        images,
+      });
+      await api.post<Activity>("/activities", body);
+      await refreshCampaigns();
+      resetCreateForm();
+      showToast("Campaign added.");
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Unable to add campaign. Please check admin credentials."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateCampaign = async (item: Activity) => {
+    if (!editTitle.trim() || !editDescription.trim()) {
+      showToast("Please enter campaign title and description.");
+      return;
+    }
+
+    try {
+      setUpdatingId(item._id);
+      const body = new FormData();
+      appendCampaignFields(body, {
+        title: editTitle,
+        category: editCategory,
+        customCategory: editCustomCategory,
+        description: editDescription,
+        location: editLocation,
+        date: editDate,
+        featured: editFeatured,
+        images: editImages,
+      });
+      await api.put<Activity>(`/activities/${item._id}`, body);
+      await refreshCampaigns();
+      cancelEdit();
+      showToast("Campaign updated.");
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Unable to update campaign. Please check admin credentials."));
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const deleteCampaign = async (item: Activity) => {
+    try {
+      await api.delete(`/activities/${item._id}`);
+      await refreshCampaigns();
+      if (editingId === item._id) cancelEdit();
+      showToast("Campaign deleted.");
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Unable to delete campaign. Please check admin credentials."));
+    }
+  };
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
+      <form onSubmit={createCampaign} className="space-y-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Campaign title</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Animal feeding drive" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Category</span>
+            <select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white">
+              {CAMPAIGN_CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}
+              <option value="custom">Add new category</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Date</span>
+            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+          </label>
+        </div>
+        {category === "custom" && (
+          <input value={customCategory} onChange={(event) => setCustomCategory(event.target.value)} placeholder="New category name" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        )}
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Description</span>
+          <textarea rows={5} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the campaign and impact..." className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Location</span>
+          <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, area, or field site" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+          <input type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} className="h-4 w-4" />
+          Feature on website
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Campaign images</span>
+          <input type="file" multiple accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => setImages(Array.from(event.target.files || []))} className="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950" />
+        </label>
+        <button type="submit" disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-950">
+          <FiPlusCircle className="h-4 w-4" />
+          {saving ? "Adding..." : "Add Campaign"}
+        </button>
+      </form>
+
+      <div className="min-w-0">
+        <div className="mb-3">
+          <p className="text-sm font-bold text-slate-950 dark:text-white">Manage campaigns</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{items.length} campaign{items.length === 1 ? "" : "s"} on the website</p>
+        </div>
+        <div className="grid max-h-[46rem] content-start gap-4 overflow-y-auto pr-2">
+          {activities.loading && items.length === 0 && <div className="h-32 animate-pulse rounded-2xl bg-slate-100 dark:bg-white/[0.06]" />}
+          {!activities.loading && items.length === 0 && <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500 dark:bg-white/[0.03]">No campaigns yet. Add the first campaign from the form.</div>}
+          {items.map((item) => {
+            const isEditing = editingId === item._id;
+            return (
+              <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d1117]">
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} placeholder="Campaign title" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <select value={editCategory} onChange={(event) => setEditCategory(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white">
+                        {CAMPAIGN_CATEGORIES.map((categoryItem) => <option key={categoryItem} value={categoryItem}>{categoryItem}</option>)}
+                        <option value="custom">Add new</option>
+                      </select>
+                      <input type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+                    </div>
+                    {editCategory === "custom" && <input value={editCustomCategory} onChange={(event) => setEditCustomCategory(event.target.value)} placeholder="New category" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />}
+                    <textarea rows={4} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} placeholder="Description" className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+                    <input value={editLocation} onChange={(event) => setEditLocation(event.target.value)} placeholder="Location" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white" />
+                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300"><input type="checkbox" checked={editFeatured} onChange={(event) => setEditFeatured(event.target.checked)} className="h-4 w-4" /> Featured</label>
+                    <input type="file" multiple accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => setEditImages(Array.from(event.target.files || []))} className="block w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-950 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950" />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-base font-bold text-slate-950 dark:text-white">{item.title}</p>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">{item.category}</p>
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.description}</p>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{item.location || "No location"}{item.featured ? " | Featured" : ""}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  {isEditing ? (
+                    <>
+                      <button type="button" disabled={updatingId === item._id} onClick={() => updateCampaign(item)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-300"><FiSave className="h-4 w-4" />{updatingId === item._id ? "Saving" : "Save"}</button>
+                      <button type="button" onClick={cancelEdit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-white/[0.06] dark:text-slate-200"><FiX className="h-4 w-4" />Cancel</button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => startEdit(item)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-white/[0.06] dark:text-slate-200"><FiEdit3 className="h-4 w-4" />Edit</button>
+                  )}
+                  <button type="button" onClick={() => deleteCampaign(item)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-400/10 dark:text-rose-300"><FiTrash2 className="h-4 w-4" />Delete</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -841,6 +1426,9 @@ export default function AdminDashboardPage() {
   const supportMessages = useApiData<SupportMessage[]>("/supporters", [], "cc_admin_supporters");
   const contactMessages = useApiData<ContactMessage[]>("/contact", [], "cc_admin_messages");
   const activities = useApiData<Activity[]>("/activities", [], STORE_KEYS.activities);
+  const faqs = useApiData<FAQItem[]>("/faqs", [], STORE_KEYS.faqs);
+  const testimonials = useApiData<Testimonial[]>("/testimonials", [], STORE_KEYS.testimonials);
+  const reports = useApiData<TransparencyReport[]>("/transparency/reports", [], STORE_KEYS.reports);
 
   const totalDonations = supportMessages.data.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const recentSupport = supportMessages.data.slice(0, 6);
@@ -848,7 +1436,12 @@ export default function AdminDashboardPage() {
   const tools: AdminTool[] = [
     { id: "overview", title: "Overview", description: "Live health, activity, and operational snapshot.", badge: "Live", action: "Review", icon: FiTrendingUp },
     { id: "support", title: "Support Leaderboard", description: "Manage donation recognition and supporter entries.", badge: "Public", action: "Manage", icon: FiUsers },
+    { id: "campaigns", title: "Campaigns", description: "Add, edit, and remove public campaign records.", badge: `${activities.data.length} items`, action: "Manage", icon: FiPlusCircle },
     { id: "gallery", title: "Gallery Upload", description: "Upload, review, and remove public gallery media.", badge: `${gallery.data.length} items`, action: "Open", icon: FiImage },
+    { id: "faqs", title: "FAQs", description: "Add and modify public question answers.", badge: `${faqs.data.length} items`, action: "Edit", icon: FiHelpCircle },
+    { id: "testimonials", title: "Testimonials", description: "Manage public community feedback.", badge: `${testimonials.data.length} items`, action: "Edit", icon: FiStar },
+    { id: "reports", title: "Reports", description: "Manage transparency report updates.", badge: `${reports.data.length} items`, action: "Edit", icon: FiFileText },
+    { id: "inbox", title: "Inbox", description: "Review and remove contact messages.", badge: `${contactMessages.data.filter((item) => !item.isRead).length} unread`, action: "Open", icon: FiMessageSquare },
     { id: "settings", title: "Payment Settings", description: "Update UPI, QR code, and payment instructions.", badge: "Secure", action: "Configure", icon: FiSettings },
   ];
 
@@ -948,6 +1541,36 @@ export default function AdminDashboardPage() {
           {selectedTool === "gallery" && (
             <Surface eyebrow="Media" title="Gallery Manager">
               <GalleryAdmin gallery={gallery} showToast={showToast} />
+            </Surface>
+          )}
+
+          {selectedTool === "campaigns" && (
+            <Surface eyebrow="Campaigns" title="Campaign Manager">
+              <CampaignAdmin activities={activities} showToast={showToast} />
+            </Surface>
+          )}
+
+          {selectedTool === "faqs" && (
+            <Surface eyebrow="Content" title="FAQ Manager">
+              <FAQAdmin faqs={faqs} showToast={showToast} />
+            </Surface>
+          )}
+
+          {selectedTool === "testimonials" && (
+            <Surface eyebrow="Content" title="Testimonial Manager">
+              <TestimonialAdmin testimonials={testimonials} showToast={showToast} />
+            </Surface>
+          )}
+
+          {selectedTool === "reports" && (
+            <Surface eyebrow="Transparency" title="Report Manager">
+              <ReportAdmin reports={reports} showToast={showToast} />
+            </Surface>
+          )}
+
+          {selectedTool === "inbox" && (
+            <Surface eyebrow="Messages" title="Contact Inbox">
+              <InboxAdmin messages={contactMessages} showToast={showToast} />
             </Surface>
           )}
 

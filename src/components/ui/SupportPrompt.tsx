@@ -29,7 +29,9 @@ export function SupportPrompt({ message }: { message: string }) {
           <FiCopy /> Copy UPI
         </button>
       </div>
-      <img src={qr} alt="Support QR" className="h-48 w-full rounded-3xl object-cover" loading="lazy" />
+      <div className="flex min-h-48 items-center justify-center rounded-3xl bg-slate-50 p-3 dark:bg-white/[0.04]">
+        <img src={qr} alt="Support QR" className="max-h-48 w-full object-contain" loading="lazy" />
+      </div>
     </div>
   );
 }
