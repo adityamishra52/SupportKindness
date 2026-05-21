@@ -5,13 +5,16 @@ import {
   FiArrowUpRight,
   FiCheckCircle,
   FiDollarSign,
+  FiEdit3,
   FiImage,
   FiInbox,
+  FiSave,
   FiSettings,
   FiTrash2,
   FiTrendingUp,
   FiUploadCloud,
   FiUsers,
+  FiX,
 } from "react-icons/fi";
 
 import { PageMeta } from "@/components/ui/PageMeta";
@@ -183,6 +186,11 @@ function SummaryWidget({ label, value, helper, icon: Icon }: {
 }
 
 const GALLERY_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1522199710521-72d69614c702?w=900&auto=format&fit=crop";
+const GALLERY_CATEGORIES = ["general", "animal", "tree", "food", "community"];
+const GALLERY_FIT_OPTIONS = [
+  { value: "contain", label: "Show full image" },
+  { value: "cover", label: "Crop thumbnail" },
+] as const;
 
 function isGalleryItem(value: unknown): value is GalleryItem {
   return (
@@ -212,10 +220,90 @@ function GalleryAdmin({
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [items, setItems] = useState<GalleryItem[]>([]);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadCategory, setUploadCategory] = useState("general");
+  const [uploadCustomCategory, setUploadCustomCategory] = useState("");
+  const [uploadCaption, setUploadCaption] = useState("");
+  const [uploadThumbnailFit, setUploadThumbnailFit] = useState<"contain" | "cover">("contain");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCategory, setEditCategory] = useState("general");
+  const [editCustomCategory, setEditCustomCategory] = useState("");
+  const [editCaption, setEditCaption] = useState("");
+  const [editThumbnailFit, setEditThumbnailFit] = useState<"contain" | "cover">("contain");
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     setItems(Array.isArray(gallery.data) ? gallery.data : []);
   }, [gallery.data]);
+
+  const resolveCategory = (category: string, customCategory: string) => {
+    const value = category === "custom" ? customCategory : category;
+    return value.trim().toLowerCase() || "general";
+  };
+
+  const syncGalleryItems = (freshItems: GalleryItem[]) => {
+    gallery.setData(freshItems);
+    writeLocal(STORE_KEYS.gallery, freshItems);
+    setItems(freshItems);
+  };
+
+  const startEdit = (item: GalleryItem) => {
+    const normalizedCategory = item.category || "general";
+    const knownCategory = GALLERY_CATEGORIES.includes(normalizedCategory.toLowerCase())
+      ? normalizedCategory.toLowerCase()
+      : "custom";
+
+    setEditingId(item._id);
+    setEditTitle(item.title || "");
+    setEditCategory(knownCategory);
+    setEditCustomCategory(knownCategory === "custom" ? normalizedCategory : "");
+    setEditCaption(item.caption || "");
+    setEditThumbnailFit(item.thumbnailFit === "cover" ? "cover" : "contain");
+    setEditFile(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditFile(null);
+  };
+
+  const refreshGallery = async () => {
+    const listResponse = await api.get<GalleryItem[]>("/gallery");
+    return Array.isArray(listResponse.data)
+      ? listResponse.data.filter(isGalleryItem)
+      : [];
+  };
+
+  const saveImageDetails = async (item: GalleryItem) => {
+    const category = resolveCategory(editCategory, editCustomCategory);
+
+    if (!editTitle.trim()) {
+      showToast("Please enter an image name.");
+      return;
+    }
+
+    try {
+      setUpdatingId(item._id);
+      const formData = new FormData();
+      formData.append("title", editTitle.trim());
+      formData.append("category", category);
+      formData.append("caption", editCaption.trim());
+      formData.append("thumbnailFit", editThumbnailFit);
+      if (editFile) formData.append("image", editFile);
+
+      await api.put<GalleryItem>(`/gallery/${item._id}`, formData);
+      const freshItems = await refreshGallery();
+      syncGalleryItems(freshItems);
+      cancelEdit();
+      showToast("Gallery image updated.");
+    } catch (error: any) {
+      showToast(getRequestMessage(error, "Update failed. Please check admin credentials."));
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const uploadImages = async (event: FormEvent) => {
     event.preventDefault();
@@ -242,12 +330,22 @@ function GalleryAdmin({
       setUploading(true);
 
       const uploadedImages: GalleryItem[] = [];
+      const category = resolveCategory(uploadCategory, uploadCustomCategory);
 
-      for (const file of files) {
+      for (const [index, file] of files.entries()) {
         const formData = new FormData();
         formData.append("image", file);
-        formData.append("title", file.name);
-        formData.append("category", "general");
+        formData.append(
+          "title",
+          uploadTitle.trim()
+            ? files.length > 1
+              ? `${uploadTitle.trim()} ${index + 1}`
+              : uploadTitle.trim()
+            : file.name
+        );
+        formData.append("category", category);
+        formData.append("caption", uploadCaption.trim());
+        formData.append("thumbnailFit", uploadThumbnailFit);
 
         const response = await api.post<GalleryItem>("/gallery", formData);
         console.debug("[GalleryAdmin] uploaded image response", {
@@ -281,10 +379,7 @@ function GalleryAdmin({
         uploadedCount: uploadedImages.length,
       });
 
-      const listResponse = await api.get<GalleryItem[]>("/gallery");
-      const freshItems = Array.isArray(listResponse.data)
-        ? listResponse.data.filter(isGalleryItem)
-        : [];
+      const freshItems = await refreshGallery();
 
       console.debug("[GalleryAdmin] fresh gallery list", {
         totalCount: freshItems.length,
@@ -305,10 +400,10 @@ function GalleryAdmin({
         );
       }
 
-      gallery.setData(freshItems);
-      writeLocal(STORE_KEYS.gallery, freshItems);
-      setItems(freshItems);
+      syncGalleryItems(freshItems);
       setFiles([]);
+      setUploadTitle("");
+      setUploadCaption("");
 
       showToast(
         uploadedImages.length === 1
@@ -326,6 +421,84 @@ function GalleryAdmin({
   return (
     <div className="grid gap-6 2xl:grid-cols-[0.72fr_1.28fr]">
       <form onSubmit={uploadImages} className="space-y-4">
+        <div className="grid gap-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Image name
+            </span>
+            <input
+              value={uploadTitle}
+              onChange={(event) => setUploadTitle(event.target.value)}
+              placeholder="Example: Food drive day 1"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-white/10"
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Category
+              </span>
+              <select
+                value={uploadCategory}
+                onChange={(event) => setUploadCategory(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-white/10"
+              >
+                {GALLERY_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                  </option>
+                ))}
+                <option value="custom">Add new category</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Thumbnail
+              </span>
+              <select
+                value={uploadThumbnailFit}
+                onChange={(event) => setUploadThumbnailFit(event.target.value === "cover" ? "cover" : "contain")}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-white/10"
+              >
+                {GALLERY_FIT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {uploadCategory === "custom" && (
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                New category name
+              </span>
+              <input
+                value={uploadCustomCategory}
+                onChange={(event) => setUploadCustomCategory(event.target.value)}
+                placeholder="Example: education"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-white/10"
+              />
+            </label>
+          )}
+
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Caption
+            </span>
+            <textarea
+              rows={3}
+              value={uploadCaption}
+              onChange={(event) => setUploadCaption(event.target.value)}
+              placeholder="Short note shown with the gallery image"
+              className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-white/10"
+            />
+          </label>
+        </div>
+
         <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-400 hover:bg-slate-100 dark:border-white/15 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
           <FiUploadCloud className="h-9 w-9 text-slate-500 dark:text-slate-400" />
 
@@ -404,14 +577,16 @@ function GalleryAdmin({
                   throw new Error("Delete reached the server, but the image still exists in the gallery list.");
                 }
 
-                gallery.setData(freshItems);
-                writeLocal(STORE_KEYS.gallery, freshItems);
-                setItems(freshItems);
+                syncGalleryItems(freshItems);
+                if (editingId === item._id) cancelEdit();
                 showToast("Image deleted.");
               } catch (error: any) {
                 showToast(getRequestMessage(error, "Delete failed. Please check admin credentials."));
               }
             };
+
+            const isEditing = editingId === item._id;
+            const imageFit = item.thumbnailFit === "cover" ? "object-cover" : "object-contain";
 
             return (
               <article
@@ -422,7 +597,7 @@ function GalleryAdmin({
                   <img
                     src={asset(item.imageUrl) || GALLERY_IMAGE_FALLBACK}
                     alt={item.title || "Gallery image"}
-                    className="h-full w-full object-cover"
+                    className={cn("h-full w-full", imageFit)}
                     loading="lazy"
                     onError={(event) => {
                       event.currentTarget.onerror = null;
@@ -441,24 +616,128 @@ function GalleryAdmin({
                 </div>
 
                 <div className="flex flex-1 flex-col justify-between gap-4 p-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-slate-950 dark:text-white">
-                      {item.title || "Untitled image"}
-                    </p>
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <input
+                        value={editTitle}
+                        onChange={(event) => setEditTitle(event.target.value)}
+                        placeholder="Image name"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+                      />
 
-                    <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                      {item.category || "general"}
-                    </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <select
+                          value={editCategory}
+                          onChange={(event) => setEditCategory(event.target.value)}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+                        >
+                          {GALLERY_CATEGORIES.map((category) => (
+                            <option key={category} value={category}>
+                              {category.charAt(0).toUpperCase() + category.slice(1)}
+                            </option>
+                          ))}
+                          <option value="custom">Add new</option>
+                        </select>
+
+                        <select
+                          value={editThumbnailFit}
+                          onChange={(event) => setEditThumbnailFit(event.target.value === "cover" ? "cover" : "contain")}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+                        >
+                          {GALLERY_FIT_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {editCategory === "custom" && (
+                        <input
+                          value={editCustomCategory}
+                          onChange={(event) => setEditCustomCategory(event.target.value)}
+                          placeholder="New category"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+                        />
+                      )}
+
+                      <textarea
+                        rows={3}
+                        value={editCaption}
+                        onChange={(event) => setEditCaption(event.target.value)}
+                        placeholder="Caption"
+                        className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+                      />
+
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        onChange={(event) => setEditFile(event.target.files?.[0] || null)}
+                        className="block w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-950 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-white dark:text-slate-300 dark:file:bg-white dark:file:text-slate-950"
+                      />
+                    </div>
+                  ) : (
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-950 dark:text-white">
+                        {item.title || "Untitled image"}
+                      </p>
+
+                      <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        {item.category || "general"}
+                      </p>
+
+                      {item.caption && (
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                          {item.caption}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={updatingId === item._id}
+                          onClick={() => saveImageDetails(item)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:bg-emerald-400/10 dark:text-emerald-300"
+                        >
+                          <FiSave className="h-4 w-4" />
+                          {updatingId === item._id ? "Saving" : "Save"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-white/[0.06] dark:text-slate-200"
+                        >
+                          <FiX className="h-4 w-4" />
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-white/[0.06] dark:text-slate-200"
+                        >
+                          <FiEdit3 className="h-4 w-4" />
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={deleteImage}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-400/10 dark:text-rose-300"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={deleteImage}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-400/10 dark:text-rose-300"
-                  >
-                    <FiTrash2 className="h-4 w-4" />
-                    Delete Image
-                  </button>
                 </div>
               </article>
             );

@@ -172,18 +172,26 @@ export default function HomePage() {
 
             <Link
               to="/gallery"
-              className="glass-surface col-span-full rounded-3xl p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/40"
+              className="group col-span-full overflow-hidden rounded-3xl border border-cyan-100/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(236,254,255,0.9))] p-5 shadow-2xl shadow-cyan-950/20 backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-cyan-950/25"
             >
-              <p className="text-sm text-slate-700 dark:text-slate-200">
-                Explore our gallery
-              </p>
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">
+                    Explore our gallery
+                  </p>
 
-              <p className="mt-1 truncate text-lg font-bold text-slate-900 dark:text-slate-100">
-                View recent impact photos
-              </p>
+                  <p className="mt-2 text-xl font-bold tracking-tight text-slate-950">
+                    View recent impact photos
+                  </p>
 
-              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-700 dark:text-cyan-100">
-                View Gallery <FiArrowRight className="h-4 w-4" />
+                  <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
+                    Browse field updates, campaign moments, and community support work.
+                  </p>
+                </div>
+
+                <div className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-emerald-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-cyan-500/25 transition group-hover:shadow-cyan-500/35">
+                  View Gallery <FiArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                </div>
               </div>
             </Link>
           </div>

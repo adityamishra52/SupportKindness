@@ -17,6 +17,7 @@ export type GalleryItem = {
   category: string;
   imageUrl: string;
   caption?: string;
+  thumbnailFit?: "contain" | "cover";
 };
 
 export type Testimonial = {
