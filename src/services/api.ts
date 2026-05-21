@@ -61,6 +61,7 @@ api.interceptors.response.use(
       );
     }
 
+    // Handle API responses with success flag
     if (
       body &&
       typeof body === "object" &&
@@ -76,23 +77,19 @@ api.interceptors.response.use(
         );
       }
 
-      // Extract data from response, checking for data, image, or images keys
-      if ("data" in body) {
-        return {
-          ...response,
-          data: body.data,
-        };
-      } else if ("image" in body) {
-        return {
-          ...response,
-          data: body.image,
-        };
-      } else if ("images" in body) {
-        return {
-          ...response,
-          data: body.images,
-        };
+      // Extract appropriate data key from successful response
+      let extractedData = body.data;
+      if (extractedData === undefined && "image" in body) {
+        extractedData = body.image;
       }
+      if (extractedData === undefined && "images" in body) {
+        extractedData = body.images;
+      }
+
+      return {
+        ...response,
+        data: extractedData !== undefined ? extractedData : body,
+      };
     }
 
     return response;
